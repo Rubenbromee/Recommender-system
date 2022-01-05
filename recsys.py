@@ -19,12 +19,14 @@ client_id = config.get('SPOTIFY', 'CLIENT_ID')
 client_secret = config.get('SPOTIFY', 'CLIENT_SECRET')
 spotify = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials(client_id, client_secret))
 
-# Test tracks
-input_tracks = ['https://open.spotify.com/track/5hmek3mrSYvfSElBsPNbxo?si=a1c8f7d350744f77', # Immortal Rites, Morbid Angel, Death Metal
-'https://open.spotify.com/track/4dzBqc5t2GWJKpGqUoTbrU?si=79152cc8d9a246aa', # 2gether, Muramasa, Electronic
-'https://open.spotify.com/track/1bAZV1EBTRi9t1cVg75i8t?si=64a754918b6142de', # I want wind to blow, The Microphones, Indie folk
-'https://open.spotify.com/track/1k1Bqnv2R0uJXQN4u6LKYt?si=16ed38939aa645c5', # Ain't no sunshine, Bill Withers, Acoustic soul
-'https://open.spotify.com/track/3e9HZxeyfWwjeyPAMmWSSQ?si=66c86570531e44af'] # Thank you, next, Ariana Grande, Pop
+# Test tracks, Min 5 input songs for PCA to work properly!
+input_tracks = ['https://open.spotify.com/track/2IxhiriDpu4iBnXZb3ytXN?si=3e118fa0c7564ae9', 
+'https://open.spotify.com/track/3m7CG7IaZffxYKSPljcw7E?si=42d1fff356f1419c', 
+'https://open.spotify.com/track/2YByIMqNtTb0T072UDfTo9?si=676f09958ce749a5', 
+'https://open.spotify.com/track/2fMCh2xOtwMt1S8iV2Laok?si=30fac17559f3479e', 
+'https://open.spotify.com/track/3lUQ6y8XeeaoK2hPydcX9c?si=c7c16a25b3074d25'] 
+
+print(input_tracks[0])
 
 num_input_s = len(input_tracks)
 
@@ -53,39 +55,61 @@ sc2 = StandardScaler().fit(track_features_data)
 audio_features_np = sc1.transform(audio_features_np)
 track_features_data = sc2.transform(track_features_data)
 
+# PCA
+n_comp = min(num_input_s, len(relevant_features))
+from sklearn.decomposition import PCA
+pca1 = PCA(n_components = n_comp)
+track_features_data = pca1.fit_transform(track_features_data)
+
+pca2 = PCA(n_components = n_comp)
+audio_features_np = pca2.fit_transform(audio_features_np)
+
 # Mud racing:
 cos_sim_list = np.empty((num_input_s, len(track_features_data)))
-print(np.shape(cos_sim_list))
 
 
 for i in range(num_input_s):
     a = audio_features_np[i].reshape(1, -1)
-    b = track_features_data
-    cos_sim = cosine_similarity(a,b)
-    print(np.shape(cos_sim))
+    cos_sim = cosine_similarity(a,track_features_data)
     cos_sim_list[i] = cos_sim[0]
 
 summed_cos_sim = np.sum(cos_sim_list, axis= 0)
 
-rec_songs = np.empty((1, 5))
-print(np.shape(rec_songs))
+rec_songs = []
+num_rec_songs = 5
 
+
+for i in range(num_rec_songs):
+    ind_max = np.where(summed_cos_sim == max(summed_cos_sim))
+    id_ind_max = track_features_data_with_id.loc[ind_max[0], ['id']].iloc[0]['id']
+    rec_songs.append("https://open.spotify.com/track/" + id_ind_max)
+    summed_cos_sim[ind_max] = 0
+
+# Weight with spotifys own recommendations
+sp_rec_songs = spotify.recommendations(seed_tracks = [input_tracks[0]])
+audio_features_sp_rec_songs = spotify.audio_features(sp_rec_songs['tracks'][1]['uri'])
+n_rec_songs_sp = len(sp_rec_songs['tracks'])
+audio_features_np_sp_rec_songs = np.empty((n_rec_songs_sp,11))
+
+print(spotify.audio_features(sp_rec_songs['tracks'][1]['uri']))
+
+for i in range(len(audio_features_np_sp_rec_songs)):
+    for j in range(len(relevant_features)):
+        audio_features_sp = spotify.audio_features(sp_rec_songs['tracks'][i]['uri'])
+        print(audio_features_sp)
+        audio_features_np_sp_rec_songs[i][j] = audio_features_sp[0][relevant_features[j]]
+        j = j + 1
+    i = i + 1
+
+pca1 = PCA(n_components = n_comp)
+audio_features_np_sp_rec_songs = pca1.fit_transform(audio_features_np_sp_rec_songs)
+
+# Calculate the cosine sim between our recommended songs and spotifys recommended songs. Songs we recommended that get a high cosine similarity get weighted higher.
+cos_sim_list_sp = np.empty((len(audio_features_np_sp_rec_songs), 1))
+
+a = audio_features_np.reshape(1, -1)
+cos_sim_sp = cosine_similarity(a,track_features_data)
+cos_sim_list_sp = cos_sim_sp
+
+# https://open.spotify.com/track/5b9k3fEryRGfcdqzJE2DKa
 # nollställ input låtar, get id of rec songs.
-
-# for i in range(len(rec_songs)):
-#     # rec_songs[i] = 
-
-# OLD:
-
-# # Cluster songs depending on euclidian distance in feature space
-# dist = 0
-# num_clusters = len(audio_features)
-# while dist < 50 and num_clusters > 2:
-#     temp_dist = 1e7
-#     kmeans = KMeans(n_clusters=num_clusters, random_state= 0).fit(audio_features_np)
-#     for k in range(num_clusters):
-#         for l in range(num_clusters):
-#             if distance.euclidean(kmeans.cluster_centers_[k], kmeans.cluster_centers_[l]) < temp_dist:
-#                 temp_dist = distance.euclidean(kmeans.cluster_centers_[k], kmeans.cluster_centers_[l])
-#     dist = temp_dist
-#     num_clusters = num_clusters - 1

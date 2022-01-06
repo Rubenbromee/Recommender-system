@@ -1,4 +1,5 @@
 # Imports
+from numpy.lib.function_base import average
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 import configparser
@@ -76,30 +77,34 @@ for i in range(num_input_s):
 summed_cos_sim = np.sum(cos_sim_list, axis= 0)
 
 rec_songs = []
-num_rec_songs = 5
-
+num_rec_songs = 100
+rec_songs_features = np.empty((num_rec_songs,n_comp))
+rec_songs_index_cos = np.empty((num_rec_songs,2))
 
 for i in range(num_rec_songs):
     ind_max = np.where(summed_cos_sim == max(summed_cos_sim))
+    rec_songs_index_cos[i][0] = ind_max[0]
+    rec_songs_index_cos[i][1] = max(summed_cos_sim)
+    rec_songs_features[i] = track_features_data[ind_max][0]
     id_ind_max = track_features_data_with_id.loc[ind_max[0], ['id']].iloc[0]['id']
     rec_songs.append("https://open.spotify.com/track/" + id_ind_max)
     summed_cos_sim[ind_max] = 0
 
 # Weight with spotifys own recommendations
-sp_rec_songs = spotify.recommendations(seed_tracks = [input_tracks[0]])
-audio_features_sp_rec_songs = spotify.audio_features(sp_rec_songs['tracks'][1]['uri'])
-n_rec_songs_sp = len(sp_rec_songs['tracks'])
-audio_features_np_sp_rec_songs = np.empty((n_rec_songs_sp,11))
+lim = 5
+sp_rec_songs = np.empty(num_input_s, dtype=object)
+for i in range(num_input_s):
+    sp_rec_songs[i] = spotify.recommendations(seed_tracks = [input_tracks[i]], limit = 5)
 
-print(spotify.audio_features(sp_rec_songs['tracks'][1]['uri']))
+audio_features_np_sp_rec_songs = np.empty((num_input_s * lim,11))
 
-for i in range(len(audio_features_np_sp_rec_songs)):
-    for j in range(len(relevant_features)):
-        audio_features_sp = spotify.audio_features(sp_rec_songs['tracks'][i]['uri'])
-        print(audio_features_sp)
-        audio_features_np_sp_rec_songs[i][j] = audio_features_sp[0][relevant_features[j]]
-        j = j + 1
-    i = i + 1
+m = 0
+for l in range(num_input_s):
+    for i in range(lim):
+        for j in range(len(relevant_features)):
+            audio_features_sp = spotify.audio_features(sp_rec_songs[l]['tracks'][i]['uri'])
+            audio_features_np_sp_rec_songs[m][j] = audio_features_sp[0][relevant_features[j]]
+        m = m + 1
 
 pca1 = PCA(n_components = n_comp)
 audio_features_np_sp_rec_songs = pca1.fit_transform(audio_features_np_sp_rec_songs)
@@ -107,9 +112,42 @@ audio_features_np_sp_rec_songs = pca1.fit_transform(audio_features_np_sp_rec_son
 # Calculate the cosine sim between our recommended songs and spotifys recommended songs. Songs we recommended that get a high cosine similarity get weighted higher.
 cos_sim_list_sp = np.empty((len(audio_features_np_sp_rec_songs), 1))
 
-a = audio_features_np.reshape(1, -1)
-cos_sim_sp = cosine_similarity(a,track_features_data)
-cos_sim_list_sp = cos_sim_sp
+cos_sim_sp = cosine_similarity(rec_songs_features, audio_features_np_sp_rec_songs)
+
+for i in range(len(cos_sim_sp)):
+    cos_sim_sp[i] = average(cos_sim_sp[i])
+    cos_sim_sp[i][1] = rec_songs_index_cos[i][0]
+
+
+def sort_inner(inner):
+    return inner[1]
+
+def sort_inner_2(inner):
+    return inner[0]
+
+cos_sim_sp = sorted(cos_sim_sp, key=sort_inner)
+rec_songs_index_cos = sorted(rec_songs_index_cos, key=sort_inner_2)
+
+for i in range(num_rec_songs):
+    rec_songs_index_cos[i][1] = (rec_songs_index_cos[i][1] + cos_sim_sp[i][0]) / 2
+
+
+rec_songs_index_cos = sorted(rec_songs_index_cos, key=sort_inner, reverse=True)
+
+rec_songs_final = []
+num_rec_songs_final = 5
+
+for i in range(num_rec_songs_final):
+    index = int(rec_songs_index_cos[i][0])
+    id_ind_max = track_features_data_with_id.loc[index, ['id']]['id']
+    rec_songs_final.append("https://open.spotify.com/track/" + id_ind_max)
+
+print(rec_songs_final)
+
+# Are you absolutely mad bruv?
+# Nan got me sorted wif a full facking english
+# I'm from West Humphreyshire upon Thames bruv
+
 
 # https://open.spotify.com/track/5b9k3fEryRGfcdqzJE2DKa
 # nollställ input låtar, get id of rec songs.

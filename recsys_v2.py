@@ -77,7 +77,7 @@ for i in range(num_input_s):
 summed_cos_sim = np.sum(cos_sim_list, axis= 0)
 
 rec_songs = []
-num_rec_songs = 500
+num_rec_songs = 20
 rec_songs_features = np.empty((num_rec_songs,n_comp))
 rec_songs_index_cos = np.empty((num_rec_songs,2))
 
@@ -94,7 +94,7 @@ for i in range(num_rec_songs):
     summed_cos_sim[ind_max] = 0
 
 # Weight with spotifys own recommendations
-lim = 5
+lim = 1
 sp_rec_songs = np.empty(num_input_s, dtype=object)
 for i in range(num_input_s):
     sp_rec_songs[i] = spotify.recommendations(seed_tracks = [input_tracks[i]], limit = lim)
@@ -113,6 +113,36 @@ pca1 = PCA(n_components = n_comp)
 audio_features_np_sp_rec_songs = pca1.fit_transform(audio_features_np_sp_rec_songs)
 
 # Calculate the cosine sim between our recommended songs and spotifys recommended songs. Songs we recommended that get a high cosine similarity get weighted higher.
+
+from sklearn.naive_bayes import GaussianNB
+
+naive_bayes = GaussianNB()
+
+# print(audio_features_np)
+# test = audio_features_np[0].reshape(1, -1)
+# print(test[0])
+# audio_features_np_r = np.transpose(audio_features_np.reshape(1, -1))
+# print("Before:", np.shape(audio_features_np), np.shape(audio_features_np_sp_rec_songs))
+# audio_features_np_sp_rec_songs_r = np.transpose(audio_features_np_sp_rec_songs.reshape(1, -1))
+# print(np.shape(audio_features_np_r), np.shape(audio_features_np_sp_rec_songs_r))
+# print(audio_features_np_r)
+
+print(np.shape(audio_features_np_sp_rec_songs))
+
+y_train = np.ones((1, num_input_s * lim))
+
+print(y_train)
+
+naive_bayes.fit(audio_features_np_sp_rec_songs, y_train[0], 2)
+
+y_predicted = naive_bayes.predict(rec_songs_features)
+
+print(naive_bayes.class_prior_)
+
+print(y_predicted)
+
+
+
 cos_sim_list_sp = np.empty((len(audio_features_np_sp_rec_songs), 1))
 
 cos_sim_sp = cosine_similarity(rec_songs_features, audio_features_np_sp_rec_songs)
@@ -127,9 +157,6 @@ def sort_inner(inner):
 
 def sort_inner_2(inner):
     return inner[0]
-
-# cos_sim_sp = sorted(cos_sim_sp, key=sort_inner)
-# rec_songs_index_cos = sorted(rec_songs_index_cos, key=sort_inner_2)
 
 
 for i in range(num_rec_songs):

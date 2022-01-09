@@ -1,6 +1,7 @@
 # Imports
 from numpy.lib.function_base import average
 import spotipy
+from spotipy.client import Spotify
 from spotipy.oauth2 import SpotifyClientCredentials
 import configparser
 import numpy as np
@@ -12,6 +13,8 @@ from scipy.spatial import distance
 from numpy import dot, string_
 from numpy.linalg import norm
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import linear_kernel
 
 # Acessing Spotipy
 config = configparser.ConfigParser()
@@ -20,12 +23,12 @@ client_id = config.get('SPOTIFY', 'CLIENT_ID')
 client_secret = config.get('SPOTIFY', 'CLIENT_SECRET')
 spotify = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials(client_id, client_secret))
 
-# Test tracks, Min 5 input songs for PCA to work properly!
-input_tracks = ['https://open.spotify.com/track/2IxhiriDpu4iBnXZb3ytXN?si=3e118fa0c7564ae9', 
-'https://open.spotify.com/track/3m7CG7IaZffxYKSPljcw7E?si=42d1fff356f1419c', 
-'https://open.spotify.com/track/2YByIMqNtTb0T072UDfTo9?si=676f09958ce749a5', 
-'https://open.spotify.com/track/2fMCh2xOtwMt1S8iV2Laok?si=30fac17559f3479e', 
-'https://open.spotify.com/track/3rkJH9BaiCWpRY718WTkBP?si=fbad00ebc9d54afa'] 
+# Test tracks, Min 5 input songs for PCA to work properly!, alt rock chill time
+input_tracks = ['https://open.spotify.com/track/2N4idqj9TT3HnH2OFT9j0v?si=466cc7f18ac84d16', 
+'https://open.spotify.com/track/4Iyo50UoYhuuYORMLrGDci?si=dab4bc69a1214552', 
+'https://open.spotify.com/track/1bAZV1EBTRi9t1cVg75i8t?si=6bfb8d07c10b4a16', 
+'https://open.spotify.com/track/0J0UZpA2Ivp4qaXe3QzCrT?si=220416549bac43ec', 
+'https://open.spotify.com/track/3Nk3CL1Z73VMydXFCfnTcI?si=2dcc74f6124a4f5d'] 
 
 print(input_tracks[0])
 
@@ -77,108 +80,59 @@ for i in range(num_input_s):
 summed_cos_sim = np.sum(cos_sim_list, axis= 0)
 
 rec_songs = []
-num_rec_songs = 20
-rec_songs_features = np.empty((num_rec_songs,n_comp))
+num_rec_songs = 1000
+rec_songs_features = np.empty((num_rec_songs,n_comp + 3)) # 5 Principal components : Index : Summed cos sim : Main genre 
 rec_songs_index_cos = np.empty((num_rec_songs,2))
-
-
-
 
 for i in range(num_rec_songs):
     ind_max = np.where(summed_cos_sim == max(summed_cos_sim))
-    rec_songs_index_cos[i][0] = ind_max[0][0]
-    rec_songs_index_cos[i][1] = max(summed_cos_sim)
-    rec_songs_features[i] = track_features_data[ind_max][0]
+    rec_songs_features[i][5] = ind_max[0][0]
+    rec_songs_features[i][6] = max(summed_cos_sim)
+    rec_songs_features[i][0:5] = track_features_data[ind_max][0]
     id_ind_max = track_features_data_with_id.loc[ind_max[0], ['id']].iloc[0]['id']
     rec_songs.append("https://open.spotify.com/track/" + id_ind_max)
     summed_cos_sim[ind_max] = 0
 
-# Weight with spotifys own recommendations
-lim = 1
-sp_rec_songs = np.empty(num_input_s, dtype=object)
-for i in range(num_input_s):
-    sp_rec_songs[i] = spotify.recommendations(seed_tracks = [input_tracks[i]], limit = lim)
+rec_songs_genres = []
+rec_songs_id_score = np.empty((num_rec_songs, 2), dtype = object) # Summed TF-IDF score with input songs genre wise : ID
 
-audio_features_np_sp_rec_songs = np.empty((num_input_s * lim,11))
-
-m = 0
-for l in range(num_input_s):
-    for i in range(lim):
-        for j in range(len(relevant_features)):
-            audio_features_sp = spotify.audio_features(sp_rec_songs[l]['tracks'][i]['uri'])
-            audio_features_np_sp_rec_songs[m][j] = audio_features_sp[0][relevant_features[j]]
-        m = m + 1
-
-pca1 = PCA(n_components = n_comp)
-audio_features_np_sp_rec_songs = pca1.fit_transform(audio_features_np_sp_rec_songs)
-
-# Calculate the cosine sim between our recommended songs and spotifys recommended songs. Songs we recommended that get a high cosine similarity get weighted higher.
-
-from sklearn.naive_bayes import GaussianNB
-
-naive_bayes = GaussianNB()
-
-# print(audio_features_np)
-# test = audio_features_np[0].reshape(1, -1)
-# print(test[0])
-# audio_features_np_r = np.transpose(audio_features_np.reshape(1, -1))
-# print("Before:", np.shape(audio_features_np), np.shape(audio_features_np_sp_rec_songs))
-# audio_features_np_sp_rec_songs_r = np.transpose(audio_features_np_sp_rec_songs.reshape(1, -1))
-# print(np.shape(audio_features_np_r), np.shape(audio_features_np_sp_rec_songs_r))
-# print(audio_features_np_r)
-
-print(np.shape(audio_features_np_sp_rec_songs))
-
-y_train = np.ones((1, num_input_s * lim))
-
-print(y_train)
-
-naive_bayes.fit(audio_features_np_sp_rec_songs, y_train[0], 2)
-
-y_predicted = naive_bayes.predict(rec_songs_features)
-
-print(naive_bayes.class_prior_)
-
-print(y_predicted)
-
-
-
-cos_sim_list_sp = np.empty((len(audio_features_np_sp_rec_songs), 1))
-
-cos_sim_sp = cosine_similarity(rec_songs_features, audio_features_np_sp_rec_songs)
-
-for i in range(len(cos_sim_sp)):
-    cos_sim_sp[i] = average(cos_sim_sp[i])
-    cos_sim_sp[i][1] = rec_songs_index_cos[i][0]
-
-
-def sort_inner(inner):
-    return inner[1]
-
-def sort_inner_2(inner):
-    return inner[0]
-
+# Create list with string with genres for each artist
+# https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfVectorizer.html
 
 for i in range(num_rec_songs):
-    rec_songs_index_cos[i][1] = (0.25 * rec_songs_index_cos[i][1] + 0.75 * cos_sim_sp[i][0]) / 2
-
-rec_songs_index_cos = sorted(rec_songs_index_cos, key=sort_inner, reverse = True)
-
-
-rec_songs_final = []
-num_rec_songs_final = 5
-
-for i in range(num_rec_songs_final):
-    index = int(rec_songs_index_cos[i][0])
-    id_ind_max = track_features_data_with_id.loc[index, ['id']]['id']
-    rec_songs_final.append("https://open.spotify.com/track/" + id_ind_max)
-
-print(rec_songs_final)
-
-# Are you absolutely mad bruv?
-# Nan got me sorted wif a full facking english
-# I'm from West Humphreyshire upon Thames bruv
+    rec_songs_id_score[i][1] = rec_songs[i]
+    artist_url = spotify.track(rec_songs[i])['album']['artists'][0]['external_urls']['spotify']
+    main_genre = ""
+    for i in range(len(spotify.artist(artist_url)['genres'])):
+        main_genre += spotify.artist(artist_url)['genres'][i] + " "
+    rec_songs_genres.append(main_genre)
 
 
-# https://open.spotify.com/track/5b9k3fEryRGfcdqzJE2DKa
-# nollställ input låtar, get id of rec songs.
+for i in range(num_input_s):
+    artist_url = spotify.track(input_tracks[i])['album']['artists'][0]['external_urls']['spotify']
+    main_genre = ""
+    for i in range(len(spotify.artist(artist_url)['genres'])):
+        main_genre += spotify.artist(artist_url)['genres'][i] + " "
+    rec_songs_genres.append(main_genre)
+
+vectorizer = TfidfVectorizer()
+
+tfidf_matrix = vectorizer.fit_transform(rec_songs_genres)
+
+
+sim_matrix = linear_kernel(tfidf_matrix, tfidf_matrix)
+
+
+summed_tfidf = np.sum(sim_matrix[:num_rec_songs, num_rec_songs:(num_rec_songs + num_input_s)], axis = 1)
+for i in range(num_rec_songs):
+    rec_songs_id_score[i][0] = summed_tfidf[i]
+print(rec_songs_id_score)
+
+def sort_inner(inner):
+    return inner[0]
+
+rec_songs_id_score = sorted(rec_songs_id_score, key = sort_inner, reverse = True)
+
+print(rec_songs_id_score[:5][:])
+
+# 10 min computing time with 1000 songs.

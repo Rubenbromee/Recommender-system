@@ -15,6 +15,7 @@ from numpy.linalg import norm
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import linear_kernel
+import sys
 
 # Acessing Spotipy
 config = configparser.ConfigParser()
@@ -28,9 +29,7 @@ input_tracks = ['https://open.spotify.com/track/2N4idqj9TT3HnH2OFT9j0v?si=466cc7
 'https://open.spotify.com/track/4Iyo50UoYhuuYORMLrGDci?si=dab4bc69a1214552', 
 'https://open.spotify.com/track/1bAZV1EBTRi9t1cVg75i8t?si=6bfb8d07c10b4a16', 
 'https://open.spotify.com/track/0J0UZpA2Ivp4qaXe3QzCrT?si=220416549bac43ec', 
-'https://open.spotify.com/track/3Nk3CL1Z73VMydXFCfnTcI?si=2dcc74f6124a4f5d'] 
-
-print(input_tracks[0])
+'https://open.spotify.com/track/3Nk3CL1Z73VMydXFCfnTcI?si=2dcc74f6124a4f5d']
 
 num_input_s = len(input_tracks)
 
@@ -70,14 +69,16 @@ audio_features_np = pca2.fit_transform(audio_features_np)
 
 # Mud racing:
 cos_sim_list = np.empty((num_input_s, len(track_features_data)))
-
+print(np.shape(audio_features_np))
 
 for i in range(num_input_s):
-    a = audio_features_np[i].reshape(1, -1)
-    cos_sim = cosine_similarity(a,track_features_data)
-    cos_sim_list[i] = cos_sim[0]
+    for j in range(len(track_features_data)):
+        a = audio_features_np[i].reshape(1, -1)
+        cos_sim_list[i][j] = distance.cityblock(a,track_features_data[j])
 
 summed_cos_sim = np.sum(cos_sim_list, axis= 0)
+
+print(summed_cos_sim, np.shape(summed_cos_sim))
 
 rec_songs = []
 num_rec_songs = 1000
@@ -85,13 +86,13 @@ rec_songs_features = np.empty((num_rec_songs,n_comp + 3)) # 5 Principal componen
 rec_songs_index_cos = np.empty((num_rec_songs,2))
 
 for i in range(num_rec_songs):
-    ind_max = np.where(summed_cos_sim == max(summed_cos_sim))
+    ind_max = np.where(summed_cos_sim == min(summed_cos_sim))
     rec_songs_features[i][5] = ind_max[0][0]
     rec_songs_features[i][6] = max(summed_cos_sim)
     rec_songs_features[i][0:5] = track_features_data[ind_max][0]
     id_ind_max = track_features_data_with_id.loc[ind_max[0], ['id']].iloc[0]['id']
     rec_songs.append("https://open.spotify.com/track/" + id_ind_max)
-    summed_cos_sim[ind_max] = 0
+    summed_cos_sim[ind_max] = 1000
 
 rec_songs_genres = []
 rec_songs_id_score = np.empty((num_rec_songs, 2), dtype = object) # Summed TF-IDF score with input songs genre wise : ID
@@ -135,4 +136,18 @@ rec_songs_id_score = sorted(rec_songs_id_score, key = sort_inner, reverse = True
 
 print(rec_songs_id_score[:5][:])
 
-# 10 min computing time with 1000 songs.
+lim = 20
+sp_rec_songs = np.empty(num_input_s * lim, dtype=object)
+for i in range(num_input_s):
+    s_rec = spotify.recommendations(seed_tracks = [input_tracks[i]], limit = lim)
+    for j in range(lim):
+        sp_rec_songs[(i * lim) + j] = s_rec['tracks'][j]['external_urls']['spotify']
+
+nr_same_songs = 0
+for i in range(num_input_s * lim):
+    if (rec_songs_id_score[i][1] in sp_rec_songs):
+        nr_same_songs += 1
+
+print("Accuracy compares to spotifys recommendations: ", (nr_same_songs / (num_input_s * lim)))
+
+# 10 min computing time with 1000 songs. All five songs were in line with the input songs.

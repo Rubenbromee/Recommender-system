@@ -67,7 +67,6 @@ track_features_data = pca1.fit_transform(track_features_data)
 pca2 = PCA(n_components = n_comp)
 audio_features_np = pca2.fit_transform(audio_features_np)
 
-# Mud racing:
 cos_sim_list = np.empty((num_input_s, len(track_features_data)))
 print(np.shape(audio_features_np))
 

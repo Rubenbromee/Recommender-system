@@ -24,7 +24,7 @@ client_id = config.get('SPOTIFY', 'CLIENT_ID')
 client_secret = config.get('SPOTIFY', 'CLIENT_SECRET')
 spotify = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials(client_id, client_secret))
 
-# Test tracks, Min 5 input songs for PCA to work properly!, alt rock chill time
+# Test tracks, Min 5 input songs for PCA to work properly!
 input_tracks = ['https://open.spotify.com/track/2N4idqj9TT3HnH2OFT9j0v?si=466cc7f18ac84d16', 
 'https://open.spotify.com/track/4Iyo50UoYhuuYORMLrGDci?si=dab4bc69a1214552', 
 'https://open.spotify.com/track/1bAZV1EBTRi9t1cVg75i8t?si=6bfb8d07c10b4a16', 

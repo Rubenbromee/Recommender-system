@@ -16,14 +16,14 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import linear_kernel
 
-# Acessing Spotipy
+# Accessing Spotipy
 config = configparser.ConfigParser()
 config.read('config.cfg')
 client_id = config.get('SPOTIFY', 'CLIENT_ID')
 client_secret = config.get('SPOTIFY', 'CLIENT_SECRET')
 spotify = spotipy.Spotify(client_credentials_manager=SpotifyClientCredentials(client_id, client_secret))
 
-# Test tracks, Min 5 input songs for PCA to work properly!, alt rock chill time
+# Test tracks, Min 5 input songs for PCA to work properly!
 input_tracks = ['https://open.spotify.com/track/2N4idqj9TT3HnH2OFT9j0v?si=466cc7f18ac84d16', 
 'https://open.spotify.com/track/4Iyo50UoYhuuYORMLrGDci?si=dab4bc69a1214552', 
 'https://open.spotify.com/track/1bAZV1EBTRi9t1cVg75i8t?si=6bfb8d07c10b4a16', 
@@ -66,9 +66,8 @@ track_features_data = pca1.fit_transform(track_features_data)
 pca2 = PCA(n_components = n_comp)
 audio_features_np = pca2.fit_transform(audio_features_np)
 
-# Mud racing:
-cos_sim_list = np.empty((num_input_s, len(track_features_data)))
 
+cos_sim_list = np.empty((num_input_s, len(track_features_data)))
 
 for i in range(num_input_s):
     a = audio_features_np[i].reshape(1, -1)
